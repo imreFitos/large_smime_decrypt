@@ -22,7 +22,7 @@ int main (int argc, char *argv[])
 {
   struct stat sb;
   off_t len;
-  const unsigned char *p;
+  void *p;
   int fd;
 
   BIO *in = NULL, *privbio = NULL;
@@ -65,7 +65,7 @@ int main (int argc, char *argv[])
     return 1;
   }
 
-  p = mmap (0, sb.st_size, PROT_READ, MAP_SHARED, fd, 0);
+  p = mmap (NULL, sb.st_size, PROT_READ, MAP_SHARED, fd, 0);
   if (p == MAP_FAILED) {
     perror ("mmap");
     return 1;
@@ -76,37 +76,22 @@ int main (int argc, char *argv[])
     return 1;
   }
 
-  in = BIO_new_mem_buf(p, sb.st_size);
-
-  if (!in)
-    goto err;
-
-  /* open file the old way - runs out of memory
-  fprintf(stderr, "About to open encrypted file\n");
-  in = BIO_new_file(argv[3], "r");
-
-  if (!in)
-    goto err;
-  */
-
   fprintf(stderr, "About to read encrypted file\n");
-  p7 = d2i_PKCS7(NULL, &p, sb.st_size);
+  p7 = d2i_PKCS7(NULL, (const unsigned char **)&p, sb.st_size);
 
   if (!p7)
     goto err;
-
-  /* for (len = 0; len < sb.st_size; len++)
-    putchar (p[len]);
-  */
 
   fprintf(stderr, "About to decrypt encrypted file\n");
   if (!PKCS7_decrypt(p7, rkey, NULL, out, 0))
     goto err;
 
-  if (munmap ((char *) p, sb.st_size) == -1) {
+  /* letting the OS take care of it until I find out why it EINVALs 
+  if (munmap ((void *) p, sb.st_size) == -1) {
     perror ("munmap");
     return 1;
   }
+  */
 
   return 0;
 
@@ -117,10 +102,8 @@ int main (int argc, char *argv[])
     }
     PKCS7_free(p7);
     EVP_PKEY_free(rkey);
-    BIO_free(in);
     BIO_free(out);
     BIO_free(privbio);
 
     return ret;
-
 }
